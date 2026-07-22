@@ -1,11 +1,7 @@
-import os
-
-import google.generativeai as genai
+from google import genai
 from app.config.settings import GEMINI_API_KEY
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 def generate_answer(context, question):
@@ -25,6 +21,9 @@ Question:
 {question}
 """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
 
     return response.text

@@ -1,43 +1,31 @@
 import chromadb
-from sentence_transformers import SentenceTransformer
-from app.config.settings import EMBEDDING_MODEL
+from google import genai
+from app.config.settings import GEMINI_API_KEY
 
-# -----------------------------
-# ChromaDB Client
-# -----------------------------
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-client = chromadb.PersistentClient(path="./chroma_db")
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
 
-collection = client.get_or_create_collection(
+collection = chroma_client.get_or_create_collection(
     name="documents"
 )
 
-# -----------------------------
-# Lazy Load Embedding Model
-# -----------------------------
 
-embedding_model = None
+def get_embedding(text: str):
+    response = client.models.embed_content(
+        model="text-embedding-004",
+        contents=text,
+    )
 
+    return response.embeddings[0].values
 
-def get_embedding_model():
-    global embedding_model
-
-    if embedding_model is None:
-        print("Loading embedding model...")
-        embedding_model = SentenceTransformer(EMBEDDING_MODEL)
-
-    return embedding_model
-
-
-# -----------------------------
-# Store Chunks
-# -----------------------------
 
 def store_chunks(document_id: str, chunks: list):
 
-    model = get_embedding_model()
-
-    embeddings = model.encode(chunks).tolist()
+    embeddings = [
+        get_embedding(chunk)
+        for chunk in chunks
+    ]
 
     ids = [
         f"{document_id}_{i}"
@@ -60,15 +48,9 @@ def store_chunks(document_id: str, chunks: list):
     )
 
 
-# -----------------------------
-# Search Chunks
-# -----------------------------
-
 def search_chunks(document_id: str, question: str, top_k: int = 3):
 
-    model = get_embedding_model()
-
-    query_embedding = model.encode(question).tolist()
+    query_embedding = get_embedding(question)
 
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -84,11 +66,7 @@ def search_chunks(document_id: str, question: str, top_k: int = 3):
     return results["documents"][0]
 
 
-# -----------------------------
-# Delete Document
-# -----------------------------
-
-def delete_document(document_id: str):
+def delete_document(document_id):
 
     collection.delete(
         where={
@@ -97,10 +75,6 @@ def delete_document(document_id: str):
     )
 
 
-# -----------------------------
-# List Documents
-# -----------------------------
-
 def list_documents():
 
     data = collection.get()
@@ -108,19 +82,13 @@ def list_documents():
     if "metadatas" not in data:
         return []
 
-    document_ids = list(
+    return list(
         set(
             metadata["document_id"]
             for metadata in data["metadatas"]
         )
     )
 
-    return document_ids
-
-
-# -----------------------------
-# Collection Count
-# -----------------------------
 
 def get_collection_count():
 
