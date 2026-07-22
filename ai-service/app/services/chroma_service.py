@@ -8,25 +8,27 @@ from app.config.settings import (
     COLLECTION_NAME,
 )
 
-# -------------------------
+# ---------------------------------------
 # Gemini Client
-# -------------------------
+# ---------------------------------------
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# -------------------------
+# ---------------------------------------
 # ChromaDB Client
-# -------------------------
+# ---------------------------------------
 
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+chroma_client = chromadb.PersistentClient(
+    path=CHROMA_DB_PATH
+)
 
 collection = chroma_client.get_or_create_collection(
     name=COLLECTION_NAME
 )
 
-# -------------------------
+# ---------------------------------------
 # Generate Embedding
-# -------------------------
+# ---------------------------------------
 
 def get_embedding(text: str):
 
@@ -35,26 +37,41 @@ def get_embedding(text: str):
         contents=text
     )
 
-    return response.embeddings[0].values
+    embedding = response.embeddings[0].values
+
+    print(f"Generated embedding size : {len(embedding)}")
+
+    return embedding
 
 
-# -------------------------
+# ---------------------------------------
 # Store Chunks
-# -------------------------
+# ---------------------------------------
 
 def store_chunks(document_id: str, chunks: list):
 
-    print("\n========== STORING DOCUMENT ==========")
+    print("\n" + "=" * 70)
+    print("STORING DOCUMENT")
+    print("=" * 70)
 
     try:
-        collection.delete(where={"document_id": document_id})
+        collection.delete(
+            where={
+                "document_id": document_id
+            }
+        )
     except Exception:
         pass
 
     embeddings = []
 
-    for chunk in chunks:
-        embeddings.append(get_embedding(chunk))
+    for index, chunk in enumerate(chunks):
+
+        print(f"Embedding Chunk {index + 1}/{len(chunks)}")
+
+        embeddings.append(
+            get_embedding(chunk)
+        )
 
     ids = [
         f"{document_id}_{i}"
@@ -76,54 +93,92 @@ def store_chunks(document_id: str, chunks: list):
         metadatas=metadatas
     )
 
+    print("\nDOCUMENT STORED SUCCESSFULLY")
     print("Document ID :", document_id)
-    print("Chunks Stored :", len(chunks))
+    print("Chunks :", len(chunks))
     print("Collection Count :", collection.count())
-    print("=====================================\n")
+
+    print("\nStored Document IDs")
+
+    data = collection.get()
+
+    if data["metadatas"]:
+
+        for meta in data["metadatas"]:
+            print(meta)
+
+    print("=" * 70 + "\n")
 
 
-# -------------------------
+# ---------------------------------------
 # Search Chunks
-# -------------------------
+# ---------------------------------------
 
 def search_chunks(document_id: str, question: str, top_k: int = 5):
 
-    print("\n========== SEARCH ==========")
+    print("\n" + "=" * 70)
+    print("SEARCHING DOCUMENT")
+    print("=" * 70)
+
     print("Question :", question)
     print("Document ID :", document_id)
 
     query_embedding = get_embedding(question)
 
-    print("Query Embedding Length :", len(query_embedding))
+    print("\nCollection Count :", collection.count())
 
-    print("\nSearching WITHOUT metadata filter...")
+    print("\nTrying metadata search...\n")
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        where={
+            "document_id": document_id
+        }
+    )
+
+    print("Metadata Search Result")
+    print(results)
+
+    if (
+        "documents" in results
+        and len(results["documents"]) > 0
+        and len(results["documents"][0]) > 0
+    ):
+
+        print("Metadata search successful.")
+
+        return results["documents"][0]
+
+    print("\nMetadata search failed.")
+    print("Trying global search...\n")
 
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k
     )
 
-    print("\nRaw Chroma Result")
+    print("Global Search Result")
     print(results)
 
-    documents = results.get("documents", [])
+    if (
+        "documents" not in results
+        or len(results["documents"]) == 0
+        or len(results["documents"][0]) == 0
+    ):
 
-    if not documents:
-        print("No documents found.")
+        print("No documents found in ChromaDB.")
+
         return []
 
-    if len(documents[0]) == 0:
-        print("No matching chunks.")
-        return []
+    print("Global search successful.")
 
-    print("\nRetrieved Chunks :", len(documents[0]))
-
-    return documents[0]
+    return results["documents"][0]
 
 
-# -------------------------
+# ---------------------------------------
 # Delete Document
-# -------------------------
+# ---------------------------------------
 
 def delete_document(document_id):
 
@@ -134,9 +189,9 @@ def delete_document(document_id):
     )
 
 
-# -------------------------
+# ---------------------------------------
 # List Documents
-# -------------------------
+# ---------------------------------------
 
 def list_documents():
 
@@ -145,17 +200,19 @@ def list_documents():
     if "metadatas" not in data:
         return []
 
-    return list(
-        set(
+    documents = set()
+
+    for metadata in data["metadatas"]:
+        documents.add(
             metadata["document_id"]
-            for metadata in data["metadatas"]
         )
-    )
+
+    return list(documents)
 
 
-# -------------------------
+# ---------------------------------------
 # Collection Count
-# -------------------------
+# ---------------------------------------
 
 def get_collection_count():
 

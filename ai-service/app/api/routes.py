@@ -47,12 +47,14 @@ def process_document(request: ProcessRequest):
 
     try:
 
+        print("=" * 60)
+        print("PROCESS DOCUMENT")
+        print("=" * 60)
+
         text = extract_text_from_pdf(request.pdfPath)
 
-        print("=" * 60)
         print("TEXT LENGTH:", len(text))
         print(text[:500])
-        print("=" * 60)
 
         chunks = split_text(text)
 
@@ -71,7 +73,7 @@ def process_document(request: ProcessRequest):
 
     except Exception as e:
 
-        print(e)
+        print("PROCESS ERROR:", str(e))
 
         return {
             "success": False,
