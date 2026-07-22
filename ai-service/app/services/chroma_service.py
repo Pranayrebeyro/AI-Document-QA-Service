@@ -1,6 +1,5 @@
 import chromadb
 from google import genai
-from google.genai import types
 
 from app.config.settings import (
     GEMINI_API_KEY,
@@ -9,34 +8,49 @@ from app.config.settings import (
     COLLECTION_NAME,
 )
 
+# -------------------------
 # Gemini Client
+# -------------------------
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# -------------------------
 # ChromaDB Client
+# -------------------------
+
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
 collection = chroma_client.get_or_create_collection(
     name=COLLECTION_NAME
 )
 
+# -------------------------
+# Generate Embedding
+# -------------------------
 
 def get_embedding(text: str):
-    """
-    Generate embedding using Gemini Embedding model.
-    """
 
     response = client.models.embed_content(
         model=EMBEDDING_MODEL,
-        contents=text,
-        config=types.EmbedContentConfig(
-            output_dimensionality=768
-        )
+        contents=text
     )
 
     return response.embeddings[0].values
 
 
+# -------------------------
+# Store Chunks
+# -------------------------
+
 def store_chunks(document_id: str, chunks: list):
+
+    print("\n========== STORING DOCUMENT ==========")
+
+    try:
+        collection.delete(where={"document_id": document_id})
+    except Exception:
+        pass
+
     embeddings = []
 
     for chunk in chunks:
@@ -62,29 +76,57 @@ def store_chunks(document_id: str, chunks: list):
         metadatas=metadatas
     )
 
+    print("Document ID :", document_id)
+    print("Chunks Stored :", len(chunks))
+    print("Collection Count :", collection.count())
+    print("=====================================\n")
 
-def search_chunks(document_id: str, question: str, top_k: int = 3):
+
+# -------------------------
+# Search Chunks
+# -------------------------
+
+def search_chunks(document_id: str, question: str, top_k: int = 5):
+
+    print("\n========== SEARCH ==========")
+    print("Question :", question)
+    print("Document ID :", document_id)
+
     query_embedding = get_embedding(question)
+
+    print("Query Embedding Length :", len(query_embedding))
+
+    print("\nSearching WITHOUT metadata filter...")
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k,
-        where={
-            "document_id": document_id
-        }
+        n_results=top_k
     )
 
-    if (
-        "documents" not in results
-        or not results["documents"]
-        or not results["documents"][0]
-    ):
+    print("\nRaw Chroma Result")
+    print(results)
+
+    documents = results.get("documents", [])
+
+    if not documents:
+        print("No documents found.")
         return []
 
-    return results["documents"][0]
+    if len(documents[0]) == 0:
+        print("No matching chunks.")
+        return []
+
+    print("\nRetrieved Chunks :", len(documents[0]))
+
+    return documents[0]
 
 
-def delete_document(document_id: str):
+# -------------------------
+# Delete Document
+# -------------------------
+
+def delete_document(document_id):
+
     collection.delete(
         where={
             "document_id": document_id
@@ -92,19 +134,29 @@ def delete_document(document_id: str):
     )
 
 
+# -------------------------
+# List Documents
+# -------------------------
+
 def list_documents():
+
     data = collection.get()
 
     if "metadatas" not in data:
         return []
 
-    documents = set()
+    return list(
+        set(
+            metadata["document_id"]
+            for metadata in data["metadatas"]
+        )
+    )
 
-    for metadata in data["metadatas"]:
-        documents.add(metadata["document_id"])
 
-    return list(documents)
-
+# -------------------------
+# Collection Count
+# -------------------------
 
 def get_collection_count():
+
     return collection.count()
