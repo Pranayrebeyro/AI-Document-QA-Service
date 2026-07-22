@@ -1,9 +1,11 @@
+import os
+
 import google.generativeai as genai
-from app.config.settings import GOOGLE_API_KEY
+from app.config.settings import GEMINI_API_KEY
 
-genai.configure(api_key=GOOGLE_API_KEY)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-model = genai.GenerativeModel("gemini-2.5-flash")
+genai.configure(api_key=GEMINI_API_KEY)
 
 
 def generate_answer(context, question):
