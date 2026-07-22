@@ -2,24 +2,42 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from app.config.settings import EMBEDDING_MODEL
 
-# Initialize ChromaDB
+# -----------------------------
+# ChromaDB Client
+# -----------------------------
+
 client = chromadb.PersistentClient(path="./chroma_db")
 
-# Create or load collection
 collection = client.get_or_create_collection(
     name="documents"
 )
 
-# Load embedding model
-embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+# -----------------------------
+# Lazy Load Embedding Model
+# -----------------------------
 
+embedding_model = None
+
+
+def get_embedding_model():
+    global embedding_model
+
+    if embedding_model is None:
+        print("Loading embedding model...")
+        embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+
+    return embedding_model
+
+
+# -----------------------------
+# Store Chunks
+# -----------------------------
 
 def store_chunks(document_id: str, chunks: list):
-    """
-    Generate embeddings for chunks and store them in ChromaDB.
-    """
 
-    embeddings = embedding_model.encode(chunks).tolist()
+    model = get_embedding_model()
+
+    embeddings = model.encode(chunks).tolist()
 
     ids = [
         f"{document_id}_{i}"
@@ -42,9 +60,15 @@ def store_chunks(document_id: str, chunks: list):
     )
 
 
-def search_chunks(document_id, question, top_k=3):
+# -----------------------------
+# Search Chunks
+# -----------------------------
 
-    query_embedding = embedding_model.encode(question).tolist()
+def search_chunks(document_id: str, question: str, top_k: int = 3):
+
+    model = get_embedding_model()
+
+    query_embedding = model.encode(question).tolist()
 
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -60,10 +84,11 @@ def search_chunks(document_id, question, top_k=3):
     return results["documents"][0]
 
 
+# -----------------------------
+# Delete Document
+# -----------------------------
+
 def delete_document(document_id: str):
-    """
-    Delete all chunks of a document.
-    """
 
     collection.delete(
         where={
@@ -72,10 +97,11 @@ def delete_document(document_id: str):
     )
 
 
+# -----------------------------
+# List Documents
+# -----------------------------
+
 def list_documents():
-    """
-    List all stored document IDs.
-    """
 
     data = collection.get()
 
@@ -92,9 +118,10 @@ def list_documents():
     return document_ids
 
 
+# -----------------------------
+# Collection Count
+# -----------------------------
+
 def get_collection_count():
-    """
-    Return total number of chunks stored.
-    """
 
     return collection.count()
