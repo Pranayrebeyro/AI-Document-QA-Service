@@ -49,7 +49,14 @@ def process_document(request: ProcessRequest):
 
         text = extract_text_from_pdf(request.pdfPath)
 
+        print("=" * 60)
+        print("TEXT LENGTH:", len(text))
+        print(text[:500])
+        print("=" * 60)
+
         chunks = split_text(text)
+
+        print("TOTAL CHUNKS:", len(chunks))
 
         store_chunks(
             document_id=request.documentId,
@@ -63,6 +70,8 @@ def process_document(request: ProcessRequest):
         }
 
     except Exception as e:
+
+        print(e)
 
         return {
             "success": False,
